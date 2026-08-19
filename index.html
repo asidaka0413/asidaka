@@ -49,7 +49,7 @@
     /* リアルタイムチャットUI */
     .chat-card {
       background: var(--card-bg); border: 1px solid var(--border-color);
-      border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; height: 500px;
+      border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; height: 500px; position: relative;
     }
     .chat-header {
       padding: 1rem 1.5rem; background: #11131a; border-bottom: 1px solid var(--border-color);
@@ -97,7 +97,7 @@
   <main class="container">
     <h2 style="margin-bottom: 1rem; text-align: center;">オーダー相談リアルタイムチャット</h2>
 
-    <div class="chat-card" style="position: relative;">
+    <div class="chat-card">
       
       <!-- 未ログイン時に表示されるオーバーレイ -->
       <div id="login-overlay" class="login-overlay">
@@ -128,12 +128,13 @@
 
   <script>
     // -------------------------------------------------------------
-    // 1. Supabase初期化（※ご自身のURLとAnon Keyに置き換えてください）
+    // 1. Supabase初期化（安全なグローバル変数割り当て）
     // -------------------------------------------------------------
     const SUPABASE_URL = 'https://wpstfkjqtsutrdiuzudz.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indwc3Rma2pxdHN1dHJkaXV6dWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMDI1NDMsImV4cCI6MjEwMjY3ODU0M30.iZhtAsFDWEkcEL6tKzb1rXwgy1UOChSRdTNRzOcIMDo';
     
-    window supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // constでの二重宣言エラーを避けるため window.supabaseClient を使用
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentUser = null;
 
@@ -141,51 +142,58 @@
     // 2. 認証処理（Xログイン・ログアウト）
     // -------------------------------------------------------------
     async function loginWithX() {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error } = await window.supabaseClient.auth.signInWithOAuth({
         provider: 'twitter',
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: window.location.origin + window.location.pathname }
       });
       if (error) alert('ログインエラー: ' + error.message);
     }
 
     async function logout() {
-      await supabase.auth.signOut();
+      await window.supabaseClient.auth.signOut();
       window.location.reload();
     }
 
     // ログイン状態の監視
-    supabase.auth.onAuthStateChange((event, session) => {
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+      const overlay = document.getElementById('login-overlay');
       if (session && session.user) {
         currentUser = session.user;
         renderLoggedInUI(currentUser);
-        document.getElementById('login-overlay').style.display = 'none';
+        if (overlay) overlay.style.display = 'none';
         loadMessages(); // 過去ログ取得
         subscribeRealtime(); // リアルタイム受信の開始
       } else {
         currentUser = null;
         renderLoggedOutUI();
-        document.getElementById('login-overlay').style.display = 'flex';
+        if (overlay) overlay.style.display = 'flex';
       }
     });
 
     function renderLoggedInUI(user) {
       const name = user.user_metadata?.full_name || user.user_metadata?.name || 'ユーザー';
       const avatar = user.user_metadata?.avatar_url || 'https://via.placeholder.com/36';
-      document.getElementById('auth-area').innerHTML = `
-        <div class="user-profile">
-          <img src="${avatar}" class="user-avatar" alt="avatar">
-          <span style="font-weight:bold; font-size:0.9rem;">${name}</span>
-          <button class="btn-logout" onclick="logout()">ログアウト</button>
-        </div>
-      `;
+      const authArea = document.getElementById('auth-area');
+      if (authArea) {
+        authArea.innerHTML = `
+          <div class="user-profile">
+            <img src="${avatar}" class="user-avatar" alt="avatar">
+            <span style="font-weight:bold; font-size:0.9rem;">${name}</span>
+            <button class="btn-logout" onclick="logout()">ログアウト</button>
+          </div>
+        `;
+      }
     }
 
     function renderLoggedOutUI() {
-      document.getElementById('auth-area').innerHTML = `
-        <button class="btn-x-login" onclick="loginWithX()">
-          <span>𝕏</span> Xでログイン
-        </button>
-      `;
+      const authArea = document.getElementById('auth-area');
+      if (authArea) {
+        authArea.innerHTML = `
+          <button class="btn-x-login" onclick="loginWithX()">
+            <span>𝕏</span> Xでログイン
+          </button>
+        `;
+      }
     }
 
     // -------------------------------------------------------------
@@ -193,7 +201,7 @@
     // -------------------------------------------------------------
     // 過去ログの読み込み
     async function loadMessages() {
-      const { data, error } = await supabase
+      const { data, error } = await window.supabaseClient
         .from('messages')
         .select('*')
         .order('created_at', { ascending: true });
@@ -204,9 +212,11 @@
       }
 
       const container = document.getElementById('chat-messages');
-      container.innerHTML = '';
-      data.forEach(msg => appendMessageUI(msg));
-      scrollToBottom();
+      if (container) {
+        container.innerHTML = '';
+        data.forEach(msg => appendMessageUI(msg));
+        scrollToBottom();
+      }
     }
 
     // メッセージの送信
@@ -218,7 +228,7 @@
 
       input.value = '';
 
-      const { error } = await supabase.from('messages').insert([
+      const { error } = await window.supabaseClient.from('messages').insert([
         {
           content: text,
           user_name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || 'VRCユーザー',
@@ -233,6 +243,8 @@
     // 画面にメッセージを描画する処理
     function appendMessageUI(msg) {
       const container = document.getElementById('chat-messages');
+      if (!container) return;
+
       const isSelf = currentUser && msg.user_id === currentUser.id;
 
       const groupDiv = document.createElement('div');
@@ -252,7 +264,7 @@
 
     // Supabase Realtimeで新着メッセージを検知
     function subscribeRealtime() {
-      supabase
+      window.supabaseClient
         .channel('public:messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
           appendMessageUI(payload.new);
@@ -262,7 +274,9 @@
 
     function scrollToBottom() {
       const container = document.getElementById('chat-messages');
-      container.scrollTop = container.scrollHeight;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
 
     function escapeHtml(str) {
