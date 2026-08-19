@@ -141,13 +141,13 @@
     // -------------------------------------------------------------
     // 2. 認証処理（Xログイン・ログアウト）
     // -------------------------------------------------------------
-    async function loginWithX() {
-      const { error } = await window.supabaseClient.auth.signInWithOAuth({
-        provider: 'twitter',
-        options: { redirectTo: window.location.origin + window.location.pathname }
-      });
-      if (error) alert('ログインエラー: ' + error.message);
-    }
+async function loginWithX() {
+  const { error } = await window.supabaseClient.auth.signInWithOAuth({
+    provider: 'x',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+  if (error) alert('ログインエラー: ' + error.message);
+}
 
     async function logout() {
       await window.supabaseClient.auth.signOut();
