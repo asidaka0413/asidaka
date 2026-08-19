@@ -237,8 +237,15 @@ async function loginWithX() {
         }
       ]);
 
-      if (error) alert('送信失敗: ' + error.message);
-    }
+      const { error } = await window.supabaseClient.from('messages').insert([...]);
+
+  if (error) {
+    alert('送信失敗: ' + error.message);
+  } else {
+
+    fetchMessages(); 
+  }
+}
 
     // 画面にメッセージを描画する処理
     function appendMessageUI(msg) {
